@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pengukur AR dengan Sensor Gerak</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #000;
+            color: #fff;
+            overflow-x: hidden;
+            touch-action: none;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+
+        header {
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(1);
+        }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .point-marker {
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background: #667eea;
+            border: 4px solid white;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            animation: pulse 1.5s infinite;
+            box-shadow: 0 0 25px rgba(102, 126, 234, 1);
+            z-index: 10;
+            font-size: 11px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); box-shadow: 0 0 25px rgba(102, 126, 234, 1); }
+            50% { transform: translate(-50%, -50%) scale(1.3); box-shadow: 0 0 40px rgba(102, 126, 234, 1); }
+        }
+
+        .live-line {
+            position: absolute;
+            height: 4px;
+            background: linear-gradient(90deg, #667eea, #f59e0b, #667eea);
+            background-size: 200% 100%;
+            transform-origin: left center;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.9);
+            z-index: 5;
+            pointer-events: none;
+            animation: lineFlow 2s linear infinite, lineGlow 1.5s ease-in-out infinite;
+        }
+
+        @keyframes lineFlow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 200% 50%; }
+        }
+
+        @keyframes lineGlow {
+            0%, 100% { opacity: 0.9; box-shadow: 0 0 20px rgba(102, 126, 234, 0.9); }
+            50% { opacity: 1; box-shadow: 0 0 35px rgba(102, 126, 234, 1); }
+        }
+
+        .line {
+            position: absolute;
+            height: 5px;
+            background: linear-gradient(90deg, #10b981, #059669);
+            transform-origin: left center;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.9);
+            z-index: 8;
+        }
+
+        .distance-label {
+            position: absolute;
+            background: rgba(0,0,0,0.95);
+            padding: 12px 20px;
+            border-radius: 30px;
+            font-size: 22px;
+            font-weight: 700;
+            color: #fff;
+            border: 3px solid #667eea;
+            transform: translate(-50%, -50%);
+            white-space: nowrap;
+            z-index: 15;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.7);
+        }
+
+        .live-distance-label {
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.98), rgba(234, 88, 12, 0.98));
+            border-color: #f59e0b;
+            animation: labelPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes labelPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.08); }
+        }
+
+        .sensor-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .sensor-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ef4444;
+            animation: sensorBlink 1s infinite;
+        }
+
+        .sensor-active {
+            background: #10b981;
+            animation: sensorActive 2s infinite;
+        }
+
+        @keyframes sensorBlink {
+            0%, 100% { opacity: 0.3; }
+            50% { opacity: 1; }
+        }
+
+        @keyframes sensorActive {
+            0%, 100% { box-shadow: 0 0 0px #10b981; }
+            50% { box-shadow: 0 0 10px #10b981; }
+        }
+
+        .motion-trail {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            background: rgba(102, 126, 234, 0.6);
+            border-radius: 50%;
+            pointer-events: none;
+            animation: trailFade 0.8s ease-out forwards;
+            z-index: 3;
+        }
+
+        @keyframes trailFade {
+            0% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.3); }
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #2a2a2a;
+            color: white;
+        }
+
+        .btn-danger {
+            background: #ef4444;
+            color: white;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .instruction {
+            text-align: center;
+            padding: 15px;
+            background: rgba(102, 126, 234, 0.2);
+            border-radius: 10px;
+            margin-bottom: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 50px;
+            height: 50px;
+            z-index: 20;
+            pointer-events: none;
+        }
+
+        .crosshair::before,
+        .crosshair::after {
+            content: '';
+            position: absolute;
+            background: #f59e0b;
+        }
+
+        .crosshair::before {
+            width: 3px;
+            height: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 0 15px #f59e0b;
+        }
+
+        .crosshair::after {
+            height: 3px;
+            width: 100%;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 0 15px #f59e0b;
+        }
+
+        .crosshair-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: #f59e0b;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 0 25px #f59e0b;
+            animation: crosshairPulse 1.5s infinite;
+        }
+
+        @keyframes crosshairPulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            50% { transform: translate(-50%, -50%) scale(1.4); opacity: 0.8; }
+        }
+
+        .content {
+            padding: 20px;
+        }
+
+        .measure-section {
+            background: #1a1a1a;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #333;
+            border-radius: 8px;
+            background: #2a2a2a;
+            color: white;
+            font-size: 16px;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .result-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.2);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-label {
+            font-size: 16px;
+        }
+
+        .result-value {
+            font-size: 18px;
+            font-weight: 700;
+        }
+
+        .info-box {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 15px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .measurements-list {
+            background: #2a2a2a;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        .measurement-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #1a1a1a;
+            border-radius: 8px;
+            border-left: 4px solid #10b981;
+        }
+
+        .status-text {
+            text-align: center;
+            padding: 12px;
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .live-measuring {
+            background: rgba(245, 158, 11, 0.4);
+            border: 2px solid #f59e0b;
+            animation: statusPulse 2s infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { box-shadow: 0 0 0px #f59e0b; }
+            50% { box-shadow: 0 0 20px #f59e0b; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📐 Pengukur AR Pro</h1>
+            <p class="subtitle">Sensor Gerak + Garis Pengikut</p>
+        </header>
+
+        <div class="camera-container" id="cameraContainer">
+            <video id="video" autoplay playsinline></video>
+            <canvas id="canvas"></canvas>
+            <div class="sensor-indicator">
+                <div class="sensor-dot" id="sensorDot"></div>
+                <span id="sensorText">Sensor OFF</span>
+            </div>
+            <div class="crosshair">
+                <div class="crosshair-center"></div>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="status-text" id="status">
+                Klik "Buka Kamera" dan "Aktifkan Sensor"
+            </div>
+
+            <div class="instruction">
+                <strong>🎯 Cara Menggunakan:</strong><br>
+                1. Buka kamera lalu aktifkan sensor gerak<br>
+                2. Tap "Tandai Titik" untuk titik pertama<br>
+                3. <strong style="color: #f59e0b;">Gerakkan kamera → Garis mengikuti pergerakan!</strong><br>
+                4. Sensor mendeteksi rotasi & pergerakan real-time<br>
+                5. Tap "Tandai Titik" lagi untuk menyimpan jarak
+            </div>
+
+            <div class="controls">
+                <button class="btn-primary" id="startCamera">📷 Buka Kamera</button>
+                <button class="btn-secondary" id="enableSensor" disabled>🎯 Aktifkan Sensor</button>
+            </div>
+
+            <div class="controls">
+                <button class="btn-secondary" id="markPoint" disabled>📍 Tandai Titik</button>
+                <button class="btn-danger" id="reset">🔄 Reset</button>
+            </div>
+
+            <div id="measurementsList" class="measurements-list hidden">
+                <h3 style="margin-bottom: 10px;">📏 Pengukuran:</h3>
+                <div id="measurementsContent"></div>
+            </div>
+
+            <div class="measure-section">
+                <h2 style="margin-bottom: 15px;">📊 Dimensi untuk Kalkulator</h2>
+                
+                <div class="input-group">
+                    <label>Panjang (meter)</label>
+                    <input type="number" id="panjang" step="0.01" placeholder="Dari pengukuran atau input manual">
+                </div>
+
+                <div class="input-group">
+                    <label>Lebar (meter)</label>
+                    <input type="number" id="lebar" step="0.01" placeholder="Dari pengukuran atau input manual">
+                </div>
+
+                <div class="input-group">
+                    <label>Tinggi (meter) - Opsional</label>
+                    <input type="number" id="tinggi" step="0.01" placeholder="Untuk menghitung volume">
+                </div>
+
+                <button class="btn-primary" id="calculate" style="width: 100%; margin-top: 10px;">
+                    🧮 Hitung Material
+                </button>
+            </div>
+
+            <div id="results" class="hidden">
+                <div class="result-card">
+                    <h3 style="margin-bottom: 15px;">📦 Kebutuhan Material</h3>
+                    
+                    <div class="result-item">
+                        <span class="result-label">Luas Area</span>
+                        <span class="result-value" id="luas">0 m²</span>
+                    </div>
+
+                    <div class="result-item">
+                        <span class="result-label">Volume</span>
+                        <span class="result-value" id="volume">0 m³</span>
+                    </div>
+
+                    <div class="result-item">
+                        <span class="result-label">🧱 Hebel</span>
+                        <span class="result-value" id="hebel">0 buah</span>
+                    </div>
+
+                    <div class="result-item">
+                        <span class="result-label">🏗️ Semen</span>
+                        <span class="result-value" id="semen">0 zak</span>
+                    </div>
+
+                    <div class="result-item">
+                        <span class="result-label">🪨 Pasir</span>
+                        <span class="result-value" id="pasir">0 m³</span>
+                    </div>
+
+                    <div class="result-item">
+                        <span class="result-label">🎨 Acian</span>
+                        <span class="result-value" id="acian">0 zak</span>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <strong>ℹ️ Catatan Perhitungan:</strong><br>
+                    • Hebel: 8 buah/m² (ukuran 60x20cm)<br>
+                    • Semen: 5-6 zak/m³ untuk pasangan dinding<br>
+                    • Pasir: 0.5 m³ per m² untuk plesteran 2cm<br>
+                    • Acian: 1 zak untuk 3-4 m² (ketebalan 2-3mm)
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stream = null;
+        let points = [];
+        let measurements = [];
+        let cameraActive = false;
+        let sensorActive = false;
+        let isTracking = false;
+        let liveLineElement = null;
+        let liveLabelElement = null;
+        let animationFrameId = null;
+
+        // Sensor data
+        let motionData = {
+            alpha: 0,
+            beta: 0,
+            gamma: 0,
+            acceleration: { x: 0, y: 0, z: 0 },
+            rotationRate: { alpha: 0, beta: 0, gamma: 0 },
+            velocity: { x: 0, y: 0, z: 0 },
+            position: { x: 0, y: 0, z: 0 }
+        };
+
+        let lastMotionTime = Date.now();
+        let calibrationOffset = { x: 0, y: 0 };
+
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const statusText = document.getElementById('status');
+        const cameraContainer = document.getElementById('cameraContainer');
+        const sensorDot = document.getElementById('sensorDot');
+        const sensorText = document.getElementById('sensorText');
+
+        // Start Camera
+        document.getElementById('startCamera').addEventListener('click', async () => {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: { ideal: 'environment' },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                video.srcObject = stream;
+                
+                video.onloadedmetadata = () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    cameraActive = true;
+                    document.getElementById('enableSensor').disabled = false;
+                    statusText.textContent = '✅ Kamera aktif - Aktifkan sensor untuk mulai';
+                    document.getElementById('startCamera').textContent = '✅ Kamera Aktif';
+                    document.getElementById('startCamera').style.background = '#10b981';
+                };
+
+            } catch (err) {
+                alert('Tidak dapat mengakses kamera: ' + err.message);
+            }
+        });
+
+        // Enable Motion Sensors
+        document.getElementById('enableSensor').addEventListener('click', async () => {
+            try {
+                // Request permission for iOS 13+
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission !== 'granted') {
+                        alert('Izin sensor ditolak');
+                        return;
+                    }
+                }
+
+                // Setup orientation sensor
+                window.addEventListener('deviceorientation', handleOrientation, true);
+                
+                // Setup motion sensor
+                window.addEventListener('devicemotion', handleMotion, true);
+
+                sensorActive = true;
+                sensorDot.classList.add('sensor-active');
+                sensorText.textContent = 'Sensor ON';
+                document.getElementById('enableSensor').textContent = '✅ Sensor Aktif';
+                document.getElementById('enableSensor').style.background = '#10b981';
+                document.getElementById('markPoint').disabled = false;
+                statusText.textContent = '🎯 Sensor aktif - Tandai titik pertama';
+
+                // Calibrate after 1 second
+                setTimeout(() => {
+                    calibrationOffset.x = motionData.position.x;
+                    calibrationOffset.y = motionData.position.y;
+                }, 1000);
+
+            } catch (err) {
+                alert('Tidak dapat mengakses sensor: ' + err.message);
+            }
+        });
+
+        // Handle device orientation
+        function handleOrientation(event) {
+            motionData.alpha = event.alpha || 0; // Z axis (0-360)
+            motionData.beta = event.beta || 0;   // X axis (-180 to 180)
+            motionData.gamma = event.gamma || 0; // Y axis (-90 to 90)
+        }
+
+        // Handle device motion
+        function handleMotion(event) {
+            const currentTime = Date.now();
+            const deltaTime = (currentTime - lastMotionTime) / 1000;
+            lastMotionTime = currentTime;
+
+            if (event.acceleration) {
+                motionData.acceleration.x = event.acceleration.x || 0;
+                motionData.acceleration.y = event.acceleration.y || 0;
+                motionData.acceleration.z = event.acceleration.z || 0;
+
+                // Calculate velocity from acceleration
+                motionData.velocity.x += motionData.acceleration.x * deltaTime;
+                motionData.velocity.y += motionData.acceleration.y * deltaTime;
+                motionData.velocity.z += motionData.acceleration.z * deltaTime;
+
+                // Calculate position from velocity (with damping)
+                motionData.position.x += motionData.velocity.x * deltaTime * 100;
+                motionData.position.y += motionData.velocity.y * deltaTime * 100;
+                motionData.position.z += motionData.velocity.z * deltaTime * 100;
+
+                // Apply damping to velocity
+                motionData.velocity.x *= 0.95;
+                motionData.velocity.y *= 0.95;
+                motionData.velocity.z *= 0.95;
+
+                // Create motion trail effect
+                if (isTracking && Math.abs(motionData.velocity.x) + Math.abs(motionData.velocity.y) > 0.5) {
+                    createMotionTrail();
+                }
+            }
+
+            if (event.rotationRate) {
+                motionData.rotationRate.alpha = event.rotationRate.alpha || 0;
+                motionData.rotationRate.beta = event.rotationRate.beta || 0;
+                motionData.rotationRate.gamma = event.rotationRate.gamma || 0;
+            }
+        }
+
+        // Create motion trail effect
+        function createMotionTrail() {
+            if (!liveLineElement) return;
+            
+            const rect = liveLineElement.getBoundingClientRect();
+            const trail = document.createElement('div');
+            trail.className = 'motion-trail';
+            trail.style.left = (rect.left + rect.width / 2) + 'px';
+            trail.style.top = (rect.top + rect.height / 2) + 'px';
+            cameraContainer.appendChild(trail);
+            
+            setTimeout(() => trail.remove(), 800);
+        }
+
+        // Update live line with sensor data
+        function updateLiveLine() {
+            if (!isTracking || points.length !== 1 || !sensorActive) {
+                if (animationFrameId) {
+                    cancelAnimationFrame(animationFrameId);
+                    animationFrameId = null;
+                }
+                return;
+            }
+
+            const containerRect = cameraContainer.getBoundingClientRect();
+            const p1 = points[0];
+            
+            // Calculate position based on sensor data (calibrated)
+            const sensorX = (motionData.position.x - calibrationOffset.x) * 2;
+            const sensorY = (motionData.position.y - calibrationOffset.y) * 2;
+            
+            // Also factor in rotation for more accuracy
+            const rotationEffect = motionData.gamma * 3; // Left/right tilt
+            const pitchEffect = motionData.beta * 2; // Up/down tilt
+            
+            // Combine sensor data with screen center
+            const centerX = containerRect.width / 2 + sensorX + rotationEffect;
+            const centerY = containerRect.height / 2 + sensorY + pitchEffect;
+            
+            // Clamp to container bounds
+            const clampedX = Math.max(0, Math.min(centerX, containerRect.width));
+            const clampedY = Math.max(0, Math.min(centerY, containerRect.height));
+            
+            // Calculate line properties
+            const dx = clampedX - p1.screenX;
+            const dy = clampedY - p1.screenY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+            
+            // Update line
+            if (liveLineElement) {
+                liveLineElement.style.left = p1.screenX + 'px';
+                liveLineElement.style.top = p1.screenY + 'px';
+                liveLineElement.style.width = length + 'px';
+                liveLineElement.style.transform = `rotate(${angle}deg)`;
+            }
+            
+            // Calculate distance based on sensor movement
+            const totalMovement = Math.sqrt(
+                Math.pow(motionData.position.x - calibrationOffset.x, 2) +
+                Math.pow(motionData.position.y - calibrationOffset.y, 2) +
+                Math.pow(motionData.position.z, 2)
+            );
+            
+            // More accurate distance calculation
+            const estimatedDistance = Math.max(0.1, Math.min(totalMovement / 50, 20));
+            
+            // Update label
+            if (liveLabelElement) {
+                liveLabelElement.textContent = `${estimatedDistance.toFixed(2)} m`;
+                liveLabelElement.style.left = (p1.screenX + dx / 2) + 'px';
+                liveLabelElement.style.top = (p1.screenY + dy / 2) + 'px';
+            }
+
+            animationFrameId = requestAnimationFrame(updateLiveLine);
+        }
+
+        // Mark Point
+        document.getElementById('markPoint').addEventListener('click', () => {
+            if (!cameraActive || !sensorActive) return;
+
+            const containerRect = cameraContainer.getBoundingClientRect();
+            const point = {
+                x: canvas.width / 2,
+                y: canvas.height / 2,
+                screenX: containerRect.width / 2,
+                screenY: containerRect.height / 2,
+                sensorData: {...motionData},
+                timestamp: Date.now()
+            };
+
+            points.push(point);
+
+            if (points.length === 1) {
+                statusText.textContent = '📍 Titik 1 ditandai - Gerakkan kamera untuk mengukur';
+                statusText.classList.add('live-measuring');
+                drawPoint(point.screenX, point.screenY, 1);
+                
+                // Reset position for relative measurement
+                calibrationOffset.x = motionData.position.x;
+                calibrationOffset.y = motionData.position.y;
+                
+                liveLineElement = document.createElement('div');
+                liveLineElement.className = 'live-line';
+                cameraContainer.appendChild(liveLineElement);
+                
+                liveLabelElement = document.createElement('div');
+                liveLabelElement.className = 'distance-label live-distance-label';
+                cameraContainer.appendChild(liveLabelElement);
+                
+                isTracking = true;
+                updateLiveLine();
+                
+            } else if (points.length === 2) {
+                isTracking = false;
+                statusText.classList.remove('live-measuring');
+                
+                if (liveLineElement) {
+                    liveLineElement.remove();
+                    liveLineElement = null;
+                }
+                if (liveLabelElement) {
+                    liveLabelElement.remove();
+                    liveLabelElement = null;
+                }
+                
+                const distance = calculateDistance(points[0], points[1]);
+                measurements.push({
+                    point1: points[0],
+                    point2: points[1],
+                    distance: distance
+                });
+
+                statusText.textContent = `✅ Jarak tersimpan: ${distance.toFixed(2)} meter`;
+                
+                drawPoint(points[1].screenX, points[1].screenY, 2);
+                drawLine(points[0], points[1], distance);
+                
+                updateMeasurementsList();
+                autoFillInputs(distance);
+
+                setTimeout(() => {
+                    points = [];
+                    statusText.textContent = '📍 Tandai titik baru untuk pengukuran lanjutan';
+                }, 2000);
+            }
+        });
+
+        // Calculate distance using sensor data
+        function calculateDistance(p1, p2)
